@@ -1,6 +1,7 @@
-  from flask import Flask, request, jsonify
-import swisseph as swe
-import datetime
+from flask import Flask, request, jsonify
+from flatlib.chart import Chart
+from flatlib.datetime import Datetime
+from flatlib.geopos import GeoPos
 
 app = Flask(__name__)
 
@@ -8,25 +9,39 @@ app = Flask(__name__)
 def run():
     data = request.json
 
-    date = data["date"]      # YYYY-MM-DD
-    time = data["time"]      # HH:MM
-    lat = float(data["lat"])
-    lon = float(data["lon"])
+    date = data["date"]      # e.g., "1975-04-28"
+    time = data["time"]      # e.g., "17:40"
+    lat = float(data["lat"]) # numerical
+    lon = float(data["lon"]) # numerical
 
-    # Convert date & time to Julian Day
-    year, month, day = map(int, date.split("-"))
-    hour, minute = map(int, time.split(":"))
-    jd = swe.julday(year, month, day, hour + minute/60)
+    # Convert date/time into Flatlib format
+    year, month, day = date.split("-")
+    hour, minute = time.split(":")
 
-    # Get planetary positions
+    dt = Datetime(year, month, day, hour, minute, "+00:00")
+    pos = GeoPos(lat, lon)
+
+    # Build the chart
+    chart = Chart(dt, pos)
+
+    # Collect planetary info
     planets = {}
-    for planet in range(swe.SUN, swe.PLUTO + 1):
-        pos = swe.calc_ut(jd, planet)[0]
-        planets[planet] = pos
+    for obj in chart.objects:
+        planets[obj] = {
+            "lon": chart[obj].lon,
+            "lat": chart[obj].lat,
+            "sign": chart[obj].sign,
+            "house": chart[obj].house
+        }
+
+    # Houses
+    houses = {}
+    for house in chart.houses:
+        houses[house] = chart.houses[house].cusplen
 
     return jsonify({
-        "julian_day": jd,
-        "planets": planets
+        "planets": planets,
+        "houses": houses
     })
 
 if __name__ == "__main__":
